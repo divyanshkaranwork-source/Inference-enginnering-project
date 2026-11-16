@@ -1,0 +1,45 @@
+# llama.cpp serving Llama-2-7B-chat (GGUF Q4_K_M, ~4 GB) behind the InferLab gateway.
+# Put the GGUF file in ./models/llama-2-7b-chat.Q4_K_M.gguf first, e.g. by converting the HF checkpoint:
+#   python convert_hf_to_gguf.py <Llama-2-7b-chat-hf dir> --outtype f16 --outfile llama-2-7b-chat.f16.gguf
+#   llama-quantize llama-2-7b-chat.f16.gguf llama-2-7b-chat.Q4_K_M.gguf Q4_K_M
+#   docker compose -f deploy/engines/llamacpp.yml up
+services:
+  engine:
+    image: ${LLAMACPP_IMAGE:-ghcr.io/ggml-org/llama.cpp:server}   # CPU build; use :server-cuda for NVIDIA. Pin by digest.
+    command:
+      - -m
+      - /models/llama-2-7b-chat.Q4_K_M.gguf
+      - --host
+      - 0.0.0.0
+      - --port
+      - "8080"
+      - -c
+      - "8192"                        # total context shared by the slots
+      - -np
+      - "4"                           # 4 parallel slots (continuous batching)
+      # - -ngl
+      # - "99"                        # offload all layers to the GPU (CUDA/Metal builds)
+    volumes: ["../../models:/models:ro"]
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    expose: ["8080"]
+
+  gateway:
+    build: ../..
+    environment:
+      INFERLAB_BACKEND: llamacpp
+      INFERLAB_UPSTREAM_URL: http://engine:8080
+      INFERLAB_UPSTREAM_MODEL: llama-2-7b-chat
+      INFERLAB_API_KEYS_FILE: /run/secrets/inferlab_api_keys
+      INFERLAB_MODEL: tiny-random
+    secrets: [inferlab_api_keys]
+    ports: ["127.0.0.1:9000:8000"]
+    read_only: true
+    tmpfs: [/tmp]
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    depends_on: [engine]
+
+secrets:
+  inferlab_api_keys: { file: ../../secrets/api_keys.txt }

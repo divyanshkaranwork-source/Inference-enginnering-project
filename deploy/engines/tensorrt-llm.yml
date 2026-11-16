@@ -1,0 +1,46 @@
+# TensorRT-LLM (trtllm-serve, OpenAI-compatible) serving Llama-2-7B-chat behind the InferLab gateway.
+#   docker compose -f deploy/engines/tensorrt-llm.yml up
+# trtllm-serve builds/loads an optimised engine for the GPU on first start (the PyTorch backend
+# needs no separate `trtllm-build` step). FP8 needs Ada/Hopper/Blackwell GPUs.
+services:
+  engine:
+    image: ${TRTLLM_IMAGE:-nvcr.io/nvidia/tensorrt-llm/release:1.0.0}   # pin by digest for production
+    entrypoint: ["/bin/sh", "-c", "HF_TOKEN=$$(cat /run/secrets/hf_token) exec trtllm-serve \"$$@\"", "--"]
+    command:
+      - meta-llama/Llama-2-7b-chat-hf
+      - --host=0.0.0.0
+      - --port=8000
+      - --max_batch_size=64
+      - --max_seq_len=4096
+      # - --tp_size=2
+    secrets: [hf_token]
+    volumes: ["./hf-cache:/root/.cache/huggingface"]
+    ipc: host
+    ulimits:
+      memlock: -1
+      stack: 67108864
+    deploy:
+      resources:
+        reservations:
+          devices: [{ driver: nvidia, count: 1, capabilities: [gpu] }]
+    expose: ["8000"]
+
+  gateway:
+    build: ../..
+    environment:
+      INFERLAB_BACKEND: tensorrt_llm
+      INFERLAB_UPSTREAM_URL: http://engine:8000
+      INFERLAB_UPSTREAM_MODEL: meta-llama/Llama-2-7b-chat-hf
+      INFERLAB_API_KEYS_FILE: /run/secrets/inferlab_api_keys
+      INFERLAB_MODEL: tiny-random
+    secrets: [inferlab_api_keys]
+    ports: ["127.0.0.1:9000:8000"]
+    read_only: true
+    tmpfs: [/tmp]
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    depends_on: [engine]
+
+secrets:
+  hf_token: { file: ../../secrets/hf_token.txt }
+  inferlab_api_keys: { file: ../../secrets/api_keys.txt }

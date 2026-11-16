@@ -1,0 +1,102 @@
+# Hardened Kubernetes deployment for the InferLab gateway.
+#   kubectl create namespace inferlab
+#   kubectl -n inferlab create secret generic inferlab-api-keys --from-literal=keys="il-$(openssl rand -hex 24)"
+#   kubectl -n inferlab apply -f deploy/k8s/inferlab.yaml
+# Models are expected on a PersistentVolumeClaim named inferlab-models (read-only mount).
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: inferlab
+automountServiceAccountToken: false
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: inferlab
+  labels: { app: inferlab }
+spec:
+  replicas: 2                      # data parallelism: replicas behind the Service
+  selector:
+    matchLabels: { app: inferlab }
+  template:
+    metadata:
+      labels: { app: inferlab }
+    spec:
+      serviceAccountName: inferlab
+      automountServiceAccountToken: false
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10001
+        runAsGroup: 10001
+        fsGroup: 10001
+        seccompProfile: { type: RuntimeDefault }
+      containers:
+        - name: inferlab
+          image: inferlab:1.0.0     # push to your registry and pin by digest (image@sha256:...)
+          imagePullPolicy: IfNotPresent
+          ports:
+            - { name: http, containerPort: 8000 }
+          env:
+            - { name: INFERLAB_API_KEYS_FILE, value: /secrets/keys }
+            - { name: INFERLAB_MODEL, value: auto }
+            - { name: INFERLAB_RATE_LIMIT_RPS, value: "5" }
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities: { drop: [ALL] }
+          resources:
+            requests: { cpu: "1", memory: 1Gi }
+            limits: { cpu: "4", memory: 4Gi }
+          readinessProbe:
+            httpGet: { path: /readyz, port: http }
+            periodSeconds: 5
+          livenessProbe:
+            httpGet: { path: /healthz, port: http }
+            periodSeconds: 20
+          volumeMounts:
+            - { name: models, mountPath: /models, readOnly: true }
+            - { name: api-keys, mountPath: /secrets, readOnly: true }
+            - { name: tmp, mountPath: /tmp }
+      volumes:
+        - name: models
+          persistentVolumeClaim: { claimName: inferlab-models, readOnly: true }
+        - name: api-keys
+          secret: { secretName: inferlab-api-keys, defaultMode: 0440 }
+        - name: tmp
+          emptyDir: { medium: Memory, sizeLimit: 16Mi }
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: inferlab
+spec:
+  selector: { app: inferlab }
+  ports:
+    - { name: http, port: 80, targetPort: http }
+  type: ClusterIP                  # expose through an Ingress with TLS, never a bare LoadBalancer
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: inferlab
+spec:
+  podSelector:
+    matchLabels: { app: inferlab }
+  policyTypes: [Ingress, Egress]
+  ingress:
+    - ports: [{ port: 8000 }]
+  egress: []                       # native backend needs no egress; add the upstream engine for proxy mode
+---
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: inferlab
+spec:
+  scaleTargetRef: { apiVersion: apps/v1, kind: Deployment, name: inferlab }
+  minReplicas: 2
+  maxReplicas: 8
+  metrics:
+    - type: Resource
+      resource: { name: cpu, target: { type: Utilization, averageUtilization: 70 } }
+  # Production LLM serving scales on queue depth / KV usage instead (custom metric
+  # inferlab_num_waiting_seqs via prometheus-adapter or KEDA) - CPU lags the real signal.

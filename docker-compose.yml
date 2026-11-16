@@ -1,0 +1,50 @@
+# docker compose up --build        (run `make secret` and `make download` first)
+# UI + API on http://127.0.0.1:8000 - the API key is in secrets/api_keys.txt
+services:
+  inferlab:
+    build: .
+    image: inferlab:1.0.0
+    ports:
+      - "127.0.0.1:8000:8000"          # loopback only; put a TLS reverse proxy in front for remote access
+    environment:
+      INFERLAB_API_KEYS_FILE: /run/secrets/inferlab_api_keys
+      INFERLAB_MODEL: auto              # stories15M if downloaded into ./models, else tiny-random
+      INFERLAB_RATE_LIMIT_RPS: "5"
+      INFERLAB_RATE_LIMIT_BURST: "20"
+    secrets:
+      - inferlab_api_keys
+    volumes:
+      - ./models:/models:ro
+    read_only: true
+    tmpfs:
+      - /tmp:size=16m,mode=1777
+    cap_drop: [ALL]
+    security_opt:
+      - no-new-privileges:true
+    pids_limit: 256
+    deploy:
+      resources:
+        limits:
+          cpus: "4"
+          memory: 4g
+    restart: unless-stopped
+
+  prometheus:
+    profiles: ["monitoring"]            # docker compose --profile monitoring up
+    image: prom/prometheus:v2.55.1
+    command: ["--config.file=/etc/prometheus/prometheus.yml", "--web.listen-address=:9090"]
+    ports:
+      - "127.0.0.1:9090:9090"
+    volumes:
+      - ./deploy/monitoring/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+    secrets:
+      - inferlab_api_keys
+    read_only: true
+    tmpfs: [/prometheus]
+    cap_drop: [ALL]
+    security_opt:
+      - no-new-privileges:true
+
+secrets:
+  inferlab_api_keys:
+    file: ./secrets/api_keys.txt

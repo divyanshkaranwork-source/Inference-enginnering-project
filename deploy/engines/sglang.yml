@@ -1,0 +1,42 @@
+# SGLang serving Llama-2-7B-chat behind the InferLab gateway.
+#   docker compose -f deploy/engines/sglang.yml up
+services:
+  engine:
+    image: ${SGLANG_IMAGE:-lmsysorg/sglang:v0.5.2}   # pin by digest for production
+    entrypoint: ["/bin/sh", "-c", "HF_TOKEN=$$(cat /run/secrets/hf_token) exec python3 -m sglang.launch_server \"$$@\"", "--"]
+    command:
+      - --model-path=meta-llama/Llama-2-7b-chat-hf
+      - --host=0.0.0.0
+      - --port=30000
+      - --context-length=4096
+      - --mem-fraction-static=0.85
+      # - --tp=2                      # tensor parallelism
+      # - --enable-dp-attention       # DP attention (MoE models)
+    secrets: [hf_token]
+    volumes: ["./hf-cache:/root/.cache/huggingface"]
+    ipc: host
+    deploy:
+      resources:
+        reservations:
+          devices: [{ driver: nvidia, count: 1, capabilities: [gpu] }]
+    expose: ["30000"]
+
+  gateway:
+    build: ../..
+    environment:
+      INFERLAB_BACKEND: sglang
+      INFERLAB_UPSTREAM_URL: http://engine:30000
+      INFERLAB_UPSTREAM_MODEL: meta-llama/Llama-2-7b-chat-hf
+      INFERLAB_API_KEYS_FILE: /run/secrets/inferlab_api_keys
+      INFERLAB_MODEL: tiny-random
+    secrets: [inferlab_api_keys]
+    ports: ["127.0.0.1:9000:8000"]
+    read_only: true
+    tmpfs: [/tmp]
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    depends_on: [engine]
+
+secrets:
+  hf_token: { file: ../../secrets/hf_token.txt }
+  inferlab_api_keys: { file: ../../secrets/api_keys.txt }

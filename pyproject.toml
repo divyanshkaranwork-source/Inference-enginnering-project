@@ -1,0 +1,68 @@
+[build-system]
+requires = ["setuptools>=69", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "inferlab"
+version = "1.0.0"
+description = "Learn inference engineering: a Llama-2 serving stack with foundations, runtime, kernels, production and 5D parallelism."
+readme = "README.md"
+requires-python = ">=3.11"
+license = { text = "MIT" }
+authors = [{ name = "InferLab contributors" }]
+keywords = ["llm", "inference", "vllm", "paged-attention", "flash-attention", "llama", "education"]
+classifiers = [
+  "Programming Language :: Python :: 3",
+  "Programming Language :: C++",
+  "License :: OSI Approved :: MIT License",
+  "Topic :: Scientific/Engineering :: Artificial Intelligence",
+]
+# Loose lower bounds for library use; requirements.txt is the pinned, audited lock.
+dependencies = [
+  "numpy>=1.26",
+  "fastapi>=0.115",
+  "uvicorn>=0.30",
+  "httpx>=0.27",
+  "prometheus-client>=0.20",
+  "pydantic>=2.7",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=8", "ruff>=0.6", "bandit>=1.7", "pip-audit>=2.7"]
+
+[project.scripts]
+inferlab = "inferlab.cli:main"
+
+[tool.setuptools.packages.find]
+include = ["inferlab*"]
+
+[tool.setuptools.package-data]
+inferlab = ["server/static/*", "server/static/**/*", "kernels/lib/*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"
+filterwarnings = ["ignore::DeprecationWarning", "ignore:Using `httpx` with `starlette.testclient`"]
+
+[tool.ruff]
+line-length = 120
+target-version = "py311"
+extend-exclude = ["gpu_kernels/triton"]
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "B", "UP", "S", "C4", "SIM"]
+ignore = [
+  "S101",   # asserts are fine in tests (bandit runs separately with its own config)
+  "B008",   # FastAPI Depends() in argument defaults is the documented pattern
+  "SIM108", # explicit if/else reads better in teaching code
+  "E741",   # `l` is the standard name for the softmax normaliser in FlashAttention papers
+  "C408",   # dict(...) calls are clearer than literals in a few test tables
+]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/*" = ["S", "B017"]
+"labs/*" = ["S311", "E501"]
+"benchmarks/*" = ["S311"]
+
+[tool.bandit]
+exclude_dirs = ["tests", ".venv", "csrc/build"]

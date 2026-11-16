@@ -1,0 +1,36 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+.pytest_cache/
+.ruff_cache/
+build/
+dist/
+
+# C++ builds and compiled kernels
+csrc/build*/
+inferlab/kernels/lib/
+*.so
+*.dylib
+*.dll
+
+# Model weights and downloads (large; fetched by `make download`)
+models/
+*.bin
+*.gguf
+*.safetensors
+*.part
+
+# Secrets - never commit
+secrets/
+.inferlab_api_key
+.env
+*.pem
+*.key
+
+# Editors / OS
+.vscode/
+.idea/
+.DS_Store

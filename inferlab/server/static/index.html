@@ -1,0 +1,42 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="referrer" content="no-referrer">
+  <title>InferLab</title>
+  <meta name="description" content="Learn inference engineering: foundations, runtime, kernels, production and 5D parallelism on a live Llama engine.">
+  <link rel="icon" href="/static/favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="/static/css/app.css">
+  <script type="module" src="/static/js/app.js"></script>
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">
+      <svg class="brand-mark" viewBox="0 0 32 32" aria-hidden="true">
+        <rect x="3" y="4" width="26" height="5" rx="2" class="c1"></rect>
+        <rect x="3" y="11" width="26" height="5" rx="2" class="c2"></rect>
+        <rect x="3" y="18" width="26" height="5" rx="2" class="c3"></rect>
+        <rect x="3" y="25" width="26" height="5" rx="2" class="c4"></rect>
+      </svg>
+      <span>InferLab <small>inference engineering</small></span>
+    </div>
+    <span class="badge" id="model-badge"><span class="dot warn"></span><span>connecting…</span></span>
+    <span class="badge" id="backend-badge">backend</span>
+    <span class="spacer"></span>
+    <form class="keybox" id="keyform" autocomplete="off">
+      <label for="api-key" class="hidden">API key</label>
+      <input id="api-key" type="password" placeholder="API key (Bearer)" spellcheck="false">
+      <button type="submit">Save key</button>
+    </form>
+    <button id="theme-toggle" class="ghost" type="button" aria-label="Toggle dark mode" title="Toggle dark mode">
+      <svg viewBox="0 0 20 20" width="16" height="16" aria-hidden="true"><circle cx="10" cy="10" r="7" fill="none" stroke="currentColor" stroke-width="1.6"></circle><path d="M10 3a7 7 0 0 1 0 14z" fill="currentColor"></path></svg>
+    </button>
+  </header>
+  <div class="layout">
+    <nav id="nav" class="sidebar" aria-label="Sections"></nav>
+    <main id="main" tabindex="-1"></main>
+  </div>
+  <div id="tooltip" class="tooltip" role="tooltip" hidden></div>
+</body>
+</html>
